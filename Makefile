@@ -1,7 +1,7 @@
 CC      = gcc
 CFLAGS  = -Wall -Wextra -std=c11 -g -D_POSIX_C_SOURCE=200809L
 LDFLAGS = -lncurses -lpthread
-TARGET  = irc
+TARGET  = matter
 SRC     = main.c irc.c ui.c state.c
 OBJ     = $(addprefix build/,$(SRC:.c=.o))
 
