@@ -69,13 +69,14 @@ class IRCBackend:
         self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
         self.reader_thread.start()
 
-        self._send(f"WLC {password} {nick}")
-
         cfg = load_config()
         if cfg and cfg.get("nick") and cfg.get("password"):
             self._pending_log = True
             self._saved_nick = cfg["nick"]
             self._saved_pass = cfg["password"]
+            self._send(f"LOG {cfg['nick']} {cfg['password']}")
+        else:
+            self._send(f"WLC {password} {nick}")
 
     def disconnect(self, notify=True):
         if self.sock:
@@ -153,13 +154,10 @@ class IRCBackend:
         if cmd == "OK":
             if len(parts) >= 2:
                 self.nickname = parts[1]
-            if self._pending_log:
-                self._pending_log = False
-                self._send(f"LOG {self._saved_nick} {self._saved_pass}")
-            else:
-                send_event(sys.stdout, {"event": "connected"})
-                if self.channel:
-                    self._send(f"JOIN {self.channel}")
+            self._pending_log = False
+            send_event(sys.stdout, {"event": "connected"})
+            if self.channel:
+                self._send(f"JOIN {self.channel}")
             return
 
         if cmd == "ERR":
