@@ -43,6 +43,7 @@ class IRCBackend:
         self.in_channel = False
         self.channel = ""
         self.nickname = ""
+        self.password = ""
         self.lock = threading.Lock()
         self.reader_thread = None
 
@@ -51,6 +52,7 @@ class IRCBackend:
             return
         self.channel = channel
         self.nickname = nick
+        self.password = password
 
         send_event(sys.stdout, {"event": "connecting", "server": server, "port": port})
 
@@ -78,7 +80,10 @@ class IRCBackend:
         self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
         self.reader_thread.start()
 
-        self._send(f"LOG {nick} {password}")
+        if password:
+            self._send(f"REG {nick} {password}")
+        else:
+            self._send(f"LOG {nick} {password}")
 
     def disconnect(self, notify=True):
         if self.sock:
@@ -164,6 +169,11 @@ class IRCBackend:
         if cmd == "ERR":
             code = parts[1] if len(parts) >= 2 else "?"
             msg = parts[2].lstrip(":") if len(parts) >= 3 else "unknown error"
+
+            if "already registered" in msg and self.password:
+                self._send(f"LOG {self.nickname} {self.password}")
+                return
+
             send_event(sys.stdout, {"event": "error", "text": f"{code}: {msg}"})
             return
 
