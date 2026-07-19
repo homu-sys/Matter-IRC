@@ -101,7 +101,7 @@ static void sep_draw(int y, int x, int w)
 
 static void draw_menu(AppState *s)
 {
-    int bw = 34, bh = 13;
+    int bw = 34, bh = 11;
     int bx = (cols - bw) / 2;
     int by = (rows - bh) / 2;
 
@@ -109,8 +109,8 @@ static void draw_menu(AppState *s)
     cprint(by + 2, "IRC CLIENT", C_TITLE, 1);
     sep_draw(by + 3, bx + 2, bw - 4);
 
-    const char *labels[] = { "Chat", "Profile", "Settings" };
-    for (int i = 0; i < 3; i++)
+    const char *labels[] = { "Chat", "Settings" };
+    for (int i = 0; i < 2; i++)
         btn_draw(by + 5 + i * 2, labels[i], s->menu_selected == i, 20);
 
     cprint(by + bh - 2, "j/k: move  enter: open  q: quit", C_DIM, 0);
@@ -118,7 +118,7 @@ static void draw_menu(AppState *s)
 
 static void draw_chat_setup(AppState *s)
 {
-    int bw = 44, bh = 15;
+    int bw = 44, bh = 19;
     int bx = (cols - bw) / 2;
     int by = (rows - bh) / 2;
 
@@ -127,14 +127,17 @@ static void draw_chat_setup(AppState *s)
     sep_draw(by + 3, bx + 2, bw - 4);
 
     struct { const char *label; const char *val; } fields[] = {
-        { "Server",  s->server   },
-        { "Port",    s->port     },
-        { "Channel", s->channel  },
-        { "Token",   s->password },
+        { "Nickname",  s->nickname  },
+        { "Realname",  s->realname  },
+        { "Username",  s->username  },
+        { "Server",    s->server    },
+        { "Port",      s->port      },
+        { "Channel",   s->channel   },
+        { "Token",     s->password  },
     };
 
     int fw = 24;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 7; i++) {
         int y   = by + 5 + i;
         int lw  = (int)strlen(fields[i].label);
         int tot = lw + 2 + fw;
@@ -157,7 +160,7 @@ static void draw_chat_setup(AppState *s)
         attroff(COLOR_PAIR(cp));
     }
 
-    btn_draw(by + 10, "[ Connect ]", s->chat_cursor == 4, 18);
+    btn_draw(by + 13, "[ Connect ]", s->chat_cursor == 7, 18);
 
     cprint(by + bh - 2, "j/k: move  enter: edit/connect  esc: back", C_DIM, 0);
 }
@@ -238,52 +241,9 @@ static void draw_chat(AppState *s)
         draw_chat_setup(s);
 }
 
-static void draw_profile(AppState *s)
-{
-    int bw = 46, bh = 14;
-    int bx = (cols - bw) / 2;
-    int by = (rows - bh) / 2;
-
-    box_draw(by, bx, bh, bw);
-    cprint(by + 2, "PROFILE", C_TITLE, 1);
-    sep_draw(by + 3, bx + 2, bw - 4);
-
-    struct { const char *label; const char *val; ActiveField f; } fields[] = {
-        { "Nickname", s->nickname,  FIELD_NICK     },
-        { "Realname", s->realname,  FIELD_REALNAME },
-        { "Username", s->username,  FIELD_USERNAME },
-    };
-
-    int fw = 24;
-    for (int i = 0; i < 3; i++) {
-        int y   = by + 5 + i * 2;
-        int lw  = (int)strlen(fields[i].label);
-        int tot = lw + 2 + fw;
-        int fx  = (cols - tot) / 2;
-
-        int is_sel  = (s->chat_cursor == i);
-        int is_edit = (is_sel && s->chat_editing);
-
-        attron(COLOR_PAIR(C_TEXT) | A_BOLD);
-        mvprintw(y, fx, "%s:", fields[i].label);
-        attroff(COLOR_PAIR(C_TEXT) | A_BOLD);
-
-        int cp = is_edit ? C_FIELD_A : (is_sel ? C_SELECT : C_FIELD);
-        attron(COLOR_PAIR(cp));
-        mvhline(y, fx + lw + 2, ' ', fw);
-        if (is_edit)
-            mvprintw(y, fx + lw + 2, " %-*.*s", fw - 1, fw - 1, s->input_buf);
-        else
-            mvprintw(y, fx + lw + 2, " %-*.*s", fw - 1, fw - 1, fields[i].val);
-        attroff(COLOR_PAIR(cp));
-    }
-
-    btn_draw(by + bh - 3, "[Back]", s->chat_cursor == 3, 16);
-}
-
 static void draw_settings(AppState *s)
 {
-    int bw = 46, bh = 16;
+    int bw = 46, bh = 17;
     int bx = (cols - bw) / 2;
     int by = (rows - bh) / 2;
 
@@ -295,17 +255,19 @@ static void draw_settings(AppState *s)
         "Auto Reconnect",
         "Show Timestamps",
         "Use Colors",
-        "Show Joins/Parts"
+        "Show Joins/Parts",
+        "Show Info"
     };
     int vals[] = {
         s->auto_reconnect,
         s->show_timestamps,
         s->use_colors,
-        s->show_join_parts
+        s->show_join_parts,
+        s->show_info
     };
 
     int r = by + 5;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         int sel = (s->chat_cursor == i);
 
         int cp = sel ? C_SELECT : C_TEXT;
@@ -322,7 +284,7 @@ static void draw_settings(AppState *s)
     }
 
     r++;
-    btn_draw(r, "[Back]", s->chat_cursor == 4, 16);
+    btn_draw(r, "[Back]", s->chat_cursor == 5, 16);
 }
 
 void ui_draw(AppState *s)
@@ -333,7 +295,6 @@ void ui_draw(AppState *s)
     switch (s->current_view) {
     case VIEW_MENU:     draw_menu(s);     break;
     case VIEW_CHAT:     draw_chat(s);     break;
-    case VIEW_PROFILE:  draw_profile(s);  break;
     case VIEW_SETTINGS: draw_settings(s); break;
     }
 
@@ -354,9 +315,10 @@ static void chat_setup_input(AppState *s, int ch)
 {
     if (s->chat_editing) {
         if (ch == 27 || ch == '\t' || ch == '\n' || ch == KEY_ENTER) {
-            char *targets[] = { s->server, s->port, s->channel, s->password };
-            int sizes[]     = { MAX_FIELD, 16, 128, 128 };
-            if (s->chat_cursor < 4) {
+            char *targets[] = { s->nickname, s->realname, s->username,
+                                s->server, s->port, s->channel, s->password };
+            int sizes[]     = { 64, 128, 64, MAX_FIELD, 16, 128, 128 };
+            if (s->chat_cursor < 7) {
                 strncpy(targets[s->chat_cursor], s->input_buf, sizes[s->chat_cursor] - 1);
                 targets[s->chat_cursor][sizes[s->chat_cursor] - 1] = '\0';
             }
@@ -374,11 +336,12 @@ static void chat_setup_input(AppState *s, int ch)
         if (s->chat_cursor > 0) s->chat_cursor--;
         break;
     case KEY_DOWN: case 'j':
-        if (s->chat_cursor < 4) s->chat_cursor++;
+        if (s->chat_cursor < 7) s->chat_cursor++;
         break;
     case '\n': case KEY_ENTER:
-        if (s->chat_cursor < 4) {
-            const char *srcs[] = { s->server, s->port, s->channel, s->password };
+        if (s->chat_cursor < 7) {
+            const char *srcs[] = { s->nickname, s->realname, s->username,
+                                   s->server, s->port, s->channel, s->password };
             strncpy(s->input_buf, srcs[s->chat_cursor], MAX_FIELD - 1);
             s->input_buf[MAX_FIELD - 1] = '\0';
             s->input_len = (int)strlen(s->input_buf);
@@ -476,51 +439,6 @@ static void chat_live_input(AppState *s, int ch)
     }
 }
 
-static void profile_input(AppState *s, int ch)
-{
-    if (s->chat_editing) {
-        if (ch == 27 || ch == '\t' || ch == '\n' || ch == KEY_ENTER) {
-            char *targets[] = { s->nickname, s->realname, s->username };
-            int sizes[]     = { 64, 128, 64 };
-            if (s->chat_cursor < 3) {
-                strncpy(targets[s->chat_cursor], s->input_buf, sizes[s->chat_cursor] - 1);
-                targets[s->chat_cursor][sizes[s->chat_cursor] - 1] = '\0';
-            }
-            s->input_len = 0;
-            s->input_buf[0] = '\0';
-            s->chat_editing = 0;
-            return;
-        }
-        field_edit_input(s->input_buf, MAX_FIELD, &s->input_len, ch);
-        return;
-    }
-
-    switch (ch) {
-    case KEY_UP: case 'k':
-        if (s->chat_cursor > 0) s->chat_cursor--;
-        break;
-    case KEY_DOWN: case 'j':
-        if (s->chat_cursor < 3) s->chat_cursor++;
-        break;
-    case '\n': case KEY_ENTER:
-        if (s->chat_cursor < 3) {
-            const char *srcs[] = { s->nickname, s->realname, s->username };
-            strncpy(s->input_buf, srcs[s->chat_cursor], MAX_FIELD - 1);
-            s->input_buf[MAX_FIELD - 1] = '\0';
-            s->input_len = (int)strlen(s->input_buf);
-            s->chat_editing = 1;
-        } else {
-            s->current_view = VIEW_MENU;
-            s->chat_cursor = 0;
-        }
-        break;
-    case 27: case 'q':
-        s->current_view = VIEW_MENU;
-        s->chat_cursor = 0;
-        break;
-    }
-}
-
 static void settings_input(AppState *s, int ch)
 {
     switch (ch) {
@@ -528,7 +446,7 @@ static void settings_input(AppState *s, int ch)
         if (s->chat_cursor > 0) s->chat_cursor--;
         break;
     case KEY_DOWN: case 'j':
-        if (s->chat_cursor < 4) s->chat_cursor++;
+        if (s->chat_cursor < 5) s->chat_cursor++;
         break;
     case '\n': case ' ':
         switch (s->chat_cursor) {
@@ -536,7 +454,8 @@ static void settings_input(AppState *s, int ch)
         case 1: s->show_timestamps = !s->show_timestamps; break;
         case 2: s->use_colors      = !s->use_colors;      break;
         case 3: s->show_join_parts = !s->show_join_parts; break;
-        case 4:
+        case 4: s->show_info       = !s->show_info;       break;
+        case 5:
             s->current_view = VIEW_MENU;
             s->chat_cursor = 0;
             break;
@@ -566,7 +485,7 @@ int ui_handle_input(AppState *s, int ch)
             if (s->menu_selected > 0) s->menu_selected--;
             break;
         case KEY_DOWN: case 'j':
-            if (s->menu_selected < 2) s->menu_selected++;
+            if (s->menu_selected < 1) s->menu_selected++;
             break;
         case '\n': case KEY_ENTER: case ' ':
             switch (s->menu_selected) {
@@ -576,11 +495,6 @@ int ui_handle_input(AppState *s, int ch)
                 s->chat_editing = 0;
                 break;
             case 1:
-                s->current_view = VIEW_PROFILE;
-                s->chat_cursor = 0;
-                s->chat_editing = 0;
-                break;
-            case 2:
                 s->current_view = VIEW_SETTINGS;
                 s->chat_cursor = 0;
                 s->chat_editing = 0;
@@ -589,11 +503,6 @@ int ui_handle_input(AppState *s, int ch)
             break;
         case 'c':
             s->current_view = VIEW_CHAT;
-            s->chat_cursor = 0;
-            s->chat_editing = 0;
-            break;
-        case 'p':
-            s->current_view = VIEW_PROFILE;
             s->chat_cursor = 0;
             s->chat_editing = 0;
             break;
@@ -610,10 +519,6 @@ int ui_handle_input(AppState *s, int ch)
             chat_live_input(s, ch);
         else
             chat_setup_input(s, ch);
-        break;
-
-    case VIEW_PROFILE:
-        profile_input(s, ch);
         break;
 
     case VIEW_SETTINGS:

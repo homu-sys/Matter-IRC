@@ -86,26 +86,31 @@ static void push_event(AppState *s, const char *json)
         pthread_mutex_lock(&s->mutex);
         s->connecting = 1;
         pthread_mutex_unlock(&s->mutex);
-        GET_VAL("server");
-        char buf[MAX_MSG_LEN];
-        snprintf(buf, sizeof(buf), "*** Connecting to %s ...", val);
-        state_push_message(s, buf);
+        if (s->show_info) {
+            GET_VAL("server");
+            char buf[MAX_MSG_LEN];
+            snprintf(buf, sizeof(buf), "*** Connecting to %s ...", val);
+            state_push_message(s, buf);
+        }
 
     } else if (strcmp(ev, "connected") == 0) {
         pthread_mutex_lock(&s->mutex);
         s->connected = 1;
         s->connecting = 0;
         pthread_mutex_unlock(&s->mutex);
-        state_push_message(s, "*** Connected to server");
+        if (s->show_info)
+            state_push_message(s, "*** Connected to server");
 
     } else if (strcmp(ev, "joined") == 0) {
         pthread_mutex_lock(&s->mutex);
         s->in_channel = 1;
         pthread_mutex_unlock(&s->mutex);
-        GET_VAL("channel");
-        char buf[MAX_MSG_LEN];
-        snprintf(buf, sizeof(buf), "*** Joined %s", val);
-        state_push_message(s, buf);
+        if (s->show_info) {
+            GET_VAL("channel");
+            char buf[MAX_MSG_LEN];
+            snprintf(buf, sizeof(buf), "*** Joined %s", val);
+            state_push_message(s, buf);
+        }
 
     } else if (strcmp(ev, "message") == 0) {
         GET_VAL("sender");
@@ -174,6 +179,7 @@ static void push_event(AppState *s, const char *json)
         state_push_message(s, buf);
 
     } else if (strcmp(ev, "system") == 0) {
+        if (!s->show_info) return;
         GET_VAL("text");
         char buf[MAX_MSG_LEN];
         snprintf(buf, sizeof(buf), "*** %s", val);
@@ -191,7 +197,8 @@ static void push_event(AppState *s, const char *json)
         s->connecting = 0;
         s->in_channel = 0;
         pthread_mutex_unlock(&s->mutex);
-        state_push_message(s, "*** Disconnected");
+        if (s->show_info)
+            state_push_message(s, "*** Disconnected");
     }
 
     #undef GET_VAL

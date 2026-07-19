@@ -32,6 +32,7 @@ void state_init(AppState *s)
     s->show_timestamps = 1;
     s->use_colors      = 1;
     s->show_join_parts = 1;
+    s->show_info       = 1;
 
     pthread_mutex_init(&s->mutex, NULL);
 }

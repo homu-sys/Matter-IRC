@@ -79,7 +79,6 @@ class IRCBackend:
         self.reader_thread.start()
 
         wlc_line = f"WLC {password} {nick}"
-        send_event(sys.stdout, {"event": "system", "text": f">>> {wlc_line}"})
         self._send(wlc_line)
 
     def disconnect(self, notify=True):
@@ -134,10 +133,9 @@ class IRCBackend:
                     line, buf = buf.split(b"\n", 1)
                     line = line.rstrip(b"\r").decode("utf-8", errors="replace")
                     if line:
-                        send_event(sys.stdout, {"event": "system", "text": f"<<< {line}"})
                         self._handle_line(line)
-        except Exception as e:
-            send_event(sys.stdout, {"event": "system", "text": f"read error: {e}"})
+        except Exception:
+            pass
         finally:
             was_connected = self.connected
             self.connected = False
@@ -153,7 +151,6 @@ class IRCBackend:
         cmd = parts[0]
 
         if cmd == "PING":
-            send_event(sys.stdout, {"event": "system", "text": ">>> PONG"})
             self._send("PONG")
             return
 

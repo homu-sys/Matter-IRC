@@ -10,7 +10,6 @@
 typedef enum {
     VIEW_MENU,
     VIEW_CHAT,
-    VIEW_PROFILE,
     VIEW_SETTINGS
 } View;
 
@@ -19,10 +18,7 @@ typedef enum {
     FIELD_SERVER,
     FIELD_PORT,
     FIELD_CHANNEL,
-    FIELD_PASSWORD,
-    FIELD_NICK,
-    FIELD_REALNAME,
-    FIELD_USERNAME
+    FIELD_PASSWORD
 } ActiveField;
 
 typedef struct {
@@ -42,6 +38,7 @@ typedef struct {
     int         show_timestamps;
     int         use_colors;
     int         show_join_parts;
+    int         show_info;
 
     char        messages[MAX_MESSAGES][MAX_MSG_LEN];
     int         msg_count;
