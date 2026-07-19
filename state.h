@@ -32,13 +32,13 @@ typedef struct {
 
     char        nickname[64];
     char        realname[128];
-    char        username[64];
 
     int         auto_reconnect;
     int         show_timestamps;
     int         use_colors;
     int         show_join_parts;
     int         show_info;
+    int         color_scheme;
 
     char        messages[MAX_MESSAGES][MAX_MSG_LEN];
     int         msg_count;

@@ -3,6 +3,7 @@
 #include "state.h"
 
 #include <ncurses.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
@@ -118,7 +119,7 @@ static void draw_menu(AppState *s)
 
 static void draw_chat_setup(AppState *s)
 {
-    int bw = 44, bh = 19;
+    int bw = 44, bh = 15;
     int bx = (cols - bw) / 2;
     int by = (rows - bh) / 2;
 
@@ -128,16 +129,14 @@ static void draw_chat_setup(AppState *s)
 
     struct { const char *label; const char *val; } fields[] = {
         { "Nickname",  s->nickname  },
-        { "Realname",  s->realname  },
-        { "Username",  s->username  },
+        { "Password",  s->password  },
         { "Server",    s->server    },
         { "Port",      s->port      },
         { "Channel",   s->channel   },
-        { "Token",     s->password  },
     };
 
     int fw = 24;
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 5; i++) {
         int y   = by + 5 + i;
         int lw  = (int)strlen(fields[i].label);
         int tot = lw + 2 + fw;
@@ -160,7 +159,7 @@ static void draw_chat_setup(AppState *s)
         attroff(COLOR_PAIR(cp));
     }
 
-    btn_draw(by + 13, "[ Connect ]", s->chat_cursor == 7, 18);
+    btn_draw(by + 11, "[ Connect ]", s->chat_cursor == 5, 18);
 
     cprint(by + bh - 2, "j/k: move  enter: edit/connect  esc: back", C_DIM, 0);
 }
@@ -315,10 +314,10 @@ static void chat_setup_input(AppState *s, int ch)
 {
     if (s->chat_editing) {
         if (ch == 27 || ch == '\t' || ch == '\n' || ch == KEY_ENTER) {
-            char *targets[] = { s->nickname, s->realname, s->username,
-                                s->server, s->port, s->channel, s->password };
-            int sizes[]     = { 64, 128, 64, MAX_FIELD, 16, 128, 128 };
-            if (s->chat_cursor < 7) {
+            char *targets[] = { s->nickname, s->password,
+                                s->server, s->port, s->channel };
+            int sizes[]     = { 64, 128, MAX_FIELD, 16, 128 };
+            if (s->chat_cursor < 5) {
                 strncpy(targets[s->chat_cursor], s->input_buf, sizes[s->chat_cursor] - 1);
                 targets[s->chat_cursor][sizes[s->chat_cursor] - 1] = '\0';
             }
@@ -336,12 +335,12 @@ static void chat_setup_input(AppState *s, int ch)
         if (s->chat_cursor > 0) s->chat_cursor--;
         break;
     case KEY_DOWN: case 'j':
-        if (s->chat_cursor < 7) s->chat_cursor++;
+        if (s->chat_cursor < 5) s->chat_cursor++;
         break;
     case '\n': case KEY_ENTER:
-        if (s->chat_cursor < 7) {
-            const char *srcs[] = { s->nickname, s->realname, s->username,
-                                   s->server, s->port, s->channel, s->password };
+        if (s->chat_cursor < 5) {
+            const char *srcs[] = { s->nickname, s->password,
+                                   s->server, s->port, s->channel };
             strncpy(s->input_buf, srcs[s->chat_cursor], MAX_FIELD - 1);
             s->input_buf[MAX_FIELD - 1] = '\0';
             s->input_len = (int)strlen(s->input_buf);
@@ -363,10 +362,6 @@ static void chat_setup_input(AppState *s, int ch)
                 json_escape(p, rem, s->channel); n = (int)strlen(p); p += n; rem -= n;
                 n = snprintf(p, rem, "\",\"nick\":\""); p += n; rem -= n;
                 json_escape(p, rem, s->nickname); n = (int)strlen(p); p += n; rem -= n;
-                n = snprintf(p, rem, "\",\"realname\":\""); p += n; rem -= n;
-                json_escape(p, rem, s->realname); n = (int)strlen(p); p += n; rem -= n;
-                n = snprintf(p, rem, "\",\"username\":\""); p += n; rem -= n;
-                json_escape(p, rem, s->username); n = (int)strlen(p); p += n; rem -= n;
                 n = snprintf(p, rem, "\",\"password\":\""); p += n; rem -= n;
                 json_escape(p, rem, s->password); n = (int)strlen(p); p += n; rem -= n;
                 snprintf(p, rem, "\"}");
@@ -388,10 +383,44 @@ static void chat_live_input(AppState *s, int ch)
     case '\n': case KEY_ENTER:
         if (s->input_len > 0) {
             if (s->input_buf[0] == '/') {
-                char esc[MAX_MSG_LEN], cmd[MAX_MSG_LEN * 2];
-                json_escape(esc, sizeof(esc), s->input_buf + 1);
-                snprintf(cmd, sizeof(cmd), "{\"cmd\":\"raw\",\"line\":\"%s\"}", esc);
-                irc_backend_send(s, cmd);
+                if (strcmp(s->input_buf, "/update") == 0) {
+                    state_push_message(s, "*** Updating...");
+                    FILE *fp = popen("git -C /home/homu/irc pull --ff-only 2>&1", "r");
+                    if (fp) {
+                        char buf[256];
+                        while (fgets(buf, sizeof(buf), fp)) {
+                            buf[strcspn(buf, "\n")] = 0;
+                            if (buf[0]) {
+                                char msg[280];
+                                snprintf(msg, sizeof(msg), "*** %s", buf);
+                                state_push_message(s, msg);
+                            }
+                        }
+                        int rc = pclose(fp);
+                        if (rc == 0) {
+                            state_push_message(s, "*** Done! Restart for latest version.");
+                            fp = popen("git -C /home/homu/irc rev-parse HEAD 2>/dev/null", "r");
+                            if (fp) {
+                                char sha[64] = "";
+                                if (fgets(sha, sizeof(sha), fp)) sha[strcspn(sha, "\n")] = 0;
+                                pclose(fp);
+                                if (sha[0]) {
+                                    char path[512];
+                                    snprintf(path, sizeof(path), "%s/.config/matterirc/.last_commit", getenv("HOME"));
+                                    FILE *f = fopen(path, "w");
+                                    if (f) { fprintf(f, "%s\n", sha); fclose(f); }
+                                }
+                            }
+                        } else {
+                            state_push_message(s, "*** Update failed.");
+                        }
+                    }
+                } else {
+                    char esc[MAX_MSG_LEN], cmd[MAX_MSG_LEN * 2];
+                    json_escape(esc, sizeof(esc), s->input_buf + 1);
+                    snprintf(cmd, sizeof(cmd), "{\"cmd\":\"raw\",\"line\":\"%s\"}", esc);
+                    irc_backend_send(s, cmd);
+                }
             } else if (s->in_channel) {
                 char es_tgt[MAX_FIELD], es_txt[MAX_MSG_LEN];
                 char cmd[MAX_MSG_LEN * 2];

@@ -1,40 +1,30 @@
 #!/usr/bin/env python3
-"""Custom IRC backend — reads JSON commands from stdin, writes JSON events to stdout.
-
-Protocol (C→S):
-  WLC <token> <nick>
-  JOIN #channel
-  PART #channel
-  MSG #channel :<text>
-  HIST #channel <count>
-  WHO #channel
-  PONG
-
-Protocol (S→C):
-  OK <nick>
-  ERR <code> :<msg>
-  JOINED #channel <nick>
-  PARTED #channel <nick>
-  MSG #channel <nick> :<text>
-  HISTBEGIN #channel
-  MSG #channel <nick> :<text> <ts>   (inside HIST batch)
-  HISTEND #channel
-  PRESENCE #channel <nick1>,<nick2>,...
-  PING
-"""
-
 import json
+import os
 import socket
 import ssl
 import sys
 import threading
-import time
 
+CONFIG_DIR = os.path.expanduser("~/.config/matterirc")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 def send_event(fd, obj):
     fd.write(json.dumps(obj) + "\n")
     fd.flush()
 
+def load_config():
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+def save_config(nick, password):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    cfg = {"nick": nick, "password": password}
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(cfg, f, indent=2)
 
 class IRCBackend:
     def __init__(self):
@@ -45,8 +35,9 @@ class IRCBackend:
         self.nickname = ""
         self.lock = threading.Lock()
         self.reader_thread = None
+        self._pending_log = False
 
-    def connect(self, server, port, channel, nick, realname, username, password=""):
+    def connect(self, server, port, channel, nick, password=""):
         if self.connected:
             return
         self.channel = channel
@@ -62,7 +53,7 @@ class IRCBackend:
             send_event(sys.stdout, {"event": "error", "text": f"Connection failed: {e}"})
             return
 
-        if str(port) == "8443" or str(port) == "443":
+        if str(port) in ("8443", "443"):
             try:
                 ctx = ssl.create_default_context()
                 ctx.check_hostname = False
@@ -78,8 +69,13 @@ class IRCBackend:
         self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
         self.reader_thread.start()
 
-        wlc_line = f"WLC {password} {nick}"
-        self._send(wlc_line)
+        self._send(f"WLC {password} {nick}")
+
+        cfg = load_config()
+        if cfg and cfg.get("nick") and cfg.get("password"):
+            self._pending_log = True
+            self._saved_nick = cfg["nick"]
+            self._saved_pass = cfg["password"]
 
     def disconnect(self, notify=True):
         if self.sock:
@@ -157,9 +153,13 @@ class IRCBackend:
         if cmd == "OK":
             if len(parts) >= 2:
                 self.nickname = parts[1]
-            send_event(sys.stdout, {"event": "connected"})
-            if self.channel:
-                self._send(f"JOIN {self.channel}")
+            if self._pending_log:
+                self._pending_log = False
+                self._send(f"LOG {self._saved_nick} {self._saved_pass}")
+            else:
+                send_event(sys.stdout, {"event": "connected"})
+                if self.channel:
+                    self._send(f"JOIN {self.channel}")
             return
 
         if cmd == "ERR":
@@ -244,8 +244,6 @@ def main():
                 msg.get("port", "8443"),
                 msg.get("channel", ""),
                 msg.get("nick", "user"),
-                msg.get("realname", "User"),
-                msg.get("username", "user"),
                 msg.get("password", ""),
             )
         elif cmd == "disconnect":

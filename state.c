@@ -26,13 +26,13 @@ void state_init(AppState *s)
     strncpy(s->password, "abc123token",     127);
     strncpy(s->nickname, "irc_user",        63);
     strncpy(s->realname, "IRC User",        127);
-    strncpy(s->username, "irc_user",        63);
 
     s->auto_reconnect  = 1;
     s->show_timestamps = 1;
     s->use_colors      = 1;
     s->show_join_parts = 1;
     s->show_info       = 1;
+    s->color_scheme    = 0;
 
     pthread_mutex_init(&s->mutex, NULL);
 }
