@@ -23,7 +23,7 @@ void state_init(AppState *s)
     strncpy(s->server,   "inspire.tail0e8d21.ts.net", MAX_FIELD - 1);
     strncpy(s->port,     "8443",            15);
     strncpy(s->channel,  "#general",        127);
-    strncpy(s->password, "abc123token",     127);
+    strncpy(s->password, "",            127);
     strncpy(s->nickname, "irc_user",        63);
     strncpy(s->realname, "IRC User",        127);
 

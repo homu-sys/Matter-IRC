@@ -5,8 +5,10 @@
 #include <ncurses.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <time.h>
+#include <unistd.h>
 
 #define C_BORDER   1
 #define C_TITLE    2
@@ -23,6 +25,18 @@
 #define C_SYS     13
 
 static int rows, cols;
+
+static void get_exe_dir(char *buf, size_t len)
+{
+    ssize_t r = readlink("/proc/self/exe", buf, len - 1);
+    if (r <= 0) {
+        strncpy(buf, ".", len);
+        return;
+    }
+    buf[r] = '\0';
+    char *slash = strrchr(buf, '/');
+    if (slash) *slash = '\0';
+}
 
 void ui_init(void)
 {
@@ -55,6 +69,34 @@ void ui_init(void)
 }
 
 void ui_cleanup(void) { endwin(); }
+
+void ui_apply_colors(AppState *s)
+{
+    if (!has_colors()) return;
+    int themes[][26] = {
+        { 240,-1, 255,-1, 252,-1, 240,-1, 252,235, 255,238, 235,117, 252,236, 114,-1, 167,-1, 238,-1, 123,-1, 243,-1 },
+        { 240,-1, 255,-1, 252,-1, 240,-1, 252,235, 255,238, 235,114, 252,236, 114,-1, 167,-1, 238,-1, 150,-1, 243,-1 },
+        { 240,-1, 255,-1, 252,-1, 240,-1, 252,235, 255,238, 235, 75, 252,236, 114,-1, 167,-1, 238,-1,  75,-1, 243,-1 },
+        { 240,-1, 255,-1, 252,-1, 240,-1, 252,235, 255,238, 235,141, 252,236, 114,-1, 167,-1, 238,-1, 141,-1, 243,-1 },
+        { 240,-1, 245,-1, 248,-1, 240,-1, 248,237, 250,239, 237,245, 250,238, 145,-1, 138,-1, 239,-1, 248,-1, 244,-1 },
+    };
+    int idx = s->color_scheme;
+    if (idx < 0 || idx > 4) idx = 0;
+    int *t = themes[idx];
+    init_pair(C_BORDER,  t[0],  t[1]);
+    init_pair(C_TITLE,   t[2],  t[3]);
+    init_pair(C_TEXT,    t[4],  t[5]);
+    init_pair(C_DIM,     t[6],  t[7]);
+    init_pair(C_FIELD,   t[8],  t[9]);
+    init_pair(C_FIELD_A, t[10], t[11]);
+    init_pair(C_SELECT,  t[12], t[13]);
+    init_pair(C_STATUS,  t[14], t[15]);
+    init_pair(C_ON,      t[16], t[17]);
+    init_pair(C_OFF,     t[18], t[19]);
+    init_pair(C_SEP,     t[20], t[21]);
+    init_pair(C_NICK,    t[22], t[23]);
+    init_pair(C_SYS,     t[24], t[25]);
+}
 
 static void box_draw(int y, int x, int h, int w)
 {
@@ -385,14 +427,18 @@ static void chat_live_input(AppState *s, int ch)
             if (s->input_buf[0] == '/') {
                 if (strcmp(s->input_buf, "/update") == 0) {
                     state_push_message(s, "*** Updating...");
-                    FILE *fp = popen("git -C /home/homu/irc pull --ff-only 2>&1", "r");
+                    char exe_dir[512];
+                    get_exe_dir(exe_dir, sizeof(exe_dir));
+                    char cmd[768];
+                    snprintf(cmd, sizeof(cmd), "sh -c 'cd \"%s\" && git stash -u && git pull --ff-only && git stash pop 2>/dev/null'", exe_dir);
+                    FILE *fp = popen(cmd, "r");
                     if (fp) {
-                        char buf[256];
-                        while (fgets(buf, sizeof(buf), fp)) {
-                            buf[strcspn(buf, "\n")] = 0;
-                            if (buf[0]) {
+                        char ubuf[256];
+                        while (fgets(ubuf, sizeof(ubuf), fp)) {
+                            ubuf[strcspn(ubuf, "\n")] = 0;
+                            if (ubuf[0]) {
                                 char msg[280];
-                                snprintf(msg, sizeof(msg), "*** %s", buf);
+                                snprintf(msg, sizeof(msg), "*** %s", ubuf);
                                 state_push_message(s, msg);
                             }
                         }
@@ -415,6 +461,42 @@ static void chat_live_input(AppState *s, int ch)
                             state_push_message(s, "*** Update failed.");
                         }
                     }
+                } else if (strcmp(s->input_buf, "/themes") == 0) {
+                    state_push_message(s, "*** Available themes:");
+                    state_push_message(s, "  1. Cyan");
+                    state_push_message(s, "  2. Green");
+                    state_push_message(s, "  3. Blue");
+                    state_push_message(s, "  4. Purple");
+                    state_push_message(s, "  5. Muted");
+                    state_push_message(s, "*** Use /theme <name> to switch.");
+                } else if (strncmp(s->input_buf, "/theme ", 7) == 0) {
+                    const char *name = s->input_buf + 7;
+                    int found = -1;
+                    const char *names[] = { "cyan", "green", "blue", "purple", "muted" };
+                    for (int i = 0; i < 5; i++) {
+                        if (strcasecmp(name, names[i]) == 0) { found = i; break; }
+                    }
+                    if (found >= 0) {
+                        s->color_scheme = found;
+                        ui_apply_colors(s);
+                        char msg[128];
+                        snprintf(msg, sizeof(msg), "*** Theme set to %s", name);
+                        state_push_message(s, msg);
+                    } else {
+                        state_push_message(s, "*** Unknown theme. Type /themes to see available themes.");
+                    }
+                } else if (strcmp(s->input_buf, "/help") == 0) {
+                    state_push_message(s, "*** Commands:");
+                    state_push_message(s, "  /help      - Show this list");
+                    state_push_message(s, "  /update    - Pull latest from git");
+                    state_push_message(s, "  /themes    - List color themes");
+                    state_push_message(s, "  /theme <n> - Switch theme (cyan/green/blue/purple/muted)");
+                    state_push_message(s, "  /quit      - Disconnect and return to menu");
+                } else if (strcmp(s->input_buf, "/quit") == 0) {
+                    irc_backend_stop(s);
+                    s->current_view = VIEW_MENU;
+                    s->chat_cursor = 0;
+                    s->chat_editing = 0;
                 } else {
                     char esc[MAX_MSG_LEN], cmd[MAX_MSG_LEN * 2];
                     json_escape(esc, sizeof(esc), s->input_buf + 1);
