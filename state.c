@@ -23,6 +23,7 @@ void state_init(AppState *s)
     strncpy(s->server,   "inspire.tail0e8d21.ts.net", MAX_FIELD - 1);
     strncpy(s->port,     "8443",            15);
     strncpy(s->channel,  "#general",        127);
+    strncpy(s->password, "abc123token",     127);
     strncpy(s->nickname, "irc_user",        63);
     strncpy(s->realname, "IRC User",        127);
     strncpy(s->username, "irc_user",        63);
@@ -48,5 +49,6 @@ void state_push_message(AppState *s, const char *msg)
         strncpy(s->messages[MAX_MESSAGES - 1], msg, MAX_MSG_LEN - 1);
         s->messages[MAX_MESSAGES - 1][MAX_MSG_LEN - 1] = '\0';
     }
+    s->msg_scroll = s->msg_count;
     pthread_mutex_unlock(&s->mutex);
 }

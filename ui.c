@@ -476,7 +476,6 @@ static void chat_live_input(AppState *s, int ch)
     }
 }
 
-
 static void profile_input(AppState *s, int ch)
 {
     if (s->chat_editing) {
@@ -522,7 +521,6 @@ static void profile_input(AppState *s, int ch)
     }
 }
 
-
 static void settings_input(AppState *s, int ch)
 {
     switch (ch) {
@@ -550,7 +548,6 @@ static void settings_input(AppState *s, int ch)
         break;
     }
 }
-
 
 int ui_handle_input(AppState *s, int ch)
 {

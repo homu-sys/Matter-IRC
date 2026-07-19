@@ -1,4 +1,27 @@
 #!/usr/bin/env python3
+"""Custom IRC backend — reads JSON commands from stdin, writes JSON events to stdout.
+
+Protocol (C→S):
+  WLC <token> <nick>
+  JOIN #channel
+  PART #channel
+  MSG #channel :<text>
+  HIST #channel <count>
+  WHO #channel
+  PONG
+
+Protocol (S→C):
+  OK <nick>
+  ERR <code> :<msg>
+  JOINED #channel <nick>
+  PARTED #channel <nick>
+  MSG #channel <nick> :<text>
+  HISTBEGIN #channel
+  MSG #channel <nick> :<text> <ts>   (inside HIST batch)
+  HISTEND #channel
+  PRESENCE #channel <nick1>,<nick2>,...
+  PING
+"""
 
 import json
 import socket
@@ -6,6 +29,7 @@ import ssl
 import sys
 import threading
 import time
+
 
 def send_event(fd, obj):
     fd.write(json.dumps(obj) + "\n")
@@ -51,10 +75,12 @@ class IRCBackend:
             except Exception:
                 pass
 
-        self._send(f"WLC {password} {nick}")
-
         self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
         self.reader_thread.start()
+
+        wlc_line = f"WLC {password} {nick}"
+        send_event(sys.stdout, {"event": "system", "text": f">>> {wlc_line}"})
+        self._send(wlc_line)
 
     def disconnect(self, notify=True):
         if self.sock:
@@ -97,7 +123,10 @@ class IRCBackend:
         buf = b""
         try:
             while self.connected:
-                data = self.sock.recv(4096)
+                try:
+                    data = self.sock.recv(4096)
+                except TimeoutError:
+                    continue
                 if not data:
                     break
                 buf += data
@@ -105,9 +134,10 @@ class IRCBackend:
                     line, buf = buf.split(b"\n", 1)
                     line = line.rstrip(b"\r").decode("utf-8", errors="replace")
                     if line:
+                        send_event(sys.stdout, {"event": "system", "text": f"<<< {line}"})
                         self._handle_line(line)
-        except Exception:
-            pass
+        except Exception as e:
+            send_event(sys.stdout, {"event": "system", "text": f"read error: {e}"})
         finally:
             was_connected = self.connected
             self.connected = False
@@ -123,6 +153,7 @@ class IRCBackend:
         cmd = parts[0]
 
         if cmd == "PING":
+            send_event(sys.stdout, {"event": "system", "text": ">>> PONG"})
             self._send("PONG")
             return
 
